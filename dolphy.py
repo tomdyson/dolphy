@@ -1,11 +1,11 @@
 # Dolphy - high performance, pure Python text indexer
 # Tom Dyson, April 2006
 
-# TODO: match Documents to numerical IDs
+# TODO: incremental indexing
 # TODO: Phrase searching
 # TODO: Boolean queries
-# TODO: HTTP interface
 # TODO: Improve summarisation performance
+# TODO: Tests
 
 import re
 from nltk_lite import tokenize
@@ -21,15 +21,26 @@ class Index:
 		A persisted hash of terms and documents
 		T_foo = {doc_1:[position_1, position_2], doc_2:[position_1]}
 		D_doc_1 = {uri:URI, title:Title, author:Author, 
-			modified:Modification Date, tokens: Tokens, raw: Raw content}
+			modified:Modification Date, str_modified:Readable date,
+			tokens: Tokens, raw_content: Raw content}
 	"""
 	
 	def __init__(self, filename):
 		self.filename = filename
 		self.db = dbhash.open(self.filename, flag='c')
+		self.max_id = int(self.db.get('M_max_id', 0))
 		self.sort_by = self.sortByPositionAndFrequency
 		
 	def add(self, document, defer_recalculate = True):
+		# Retreive (if known URI) or assign document ID
+		known_ID = self.db.get('U_'+ document.uri)
+		if known_ID:
+			document.id = int(known_ID)
+		else:
+			self.max_id += 1
+			self.db['M_max_id'] = str(self.max_id)
+			document.id = self.max_id
+			self.db["U_" + document.uri] = str(document.id)
 		# Add an entry for each document's metadata
 		doc_details = {}
 		doc_details['uri'] = document.uri
@@ -44,15 +55,15 @@ class Index:
 			doc_details['raw_content'] = document.raw_data
 		except AttributeError:
 			pass
-		self.db["D_" + document.uri.encode('utf-8')] = marshal.dumps(doc_details)
+		self.db["D_%s" % document.id] = marshal.dumps(doc_details)
 		# Add/update the entry for each term in the document
 		for term in document.tokens:
 			if self.db.has_key('T_' + term):
 				term_data = marshal.loads(self.db['T_' + term])
-				term_data[document.uri] = (document.tokens[term], document.length)
+				term_data[document.id] = (document.tokens[term], document.length)
 			else:
 				term_data = {}
-				term_data[document.uri] = (document.tokens[term], document.length)
+				term_data[document.id] = (document.tokens[term], document.length)
 			self.db['T_' + term] = marshal.dumps(term_data)
 		
 	def remove(self, document_URI, defer_recalculate = True):
@@ -100,7 +111,7 @@ class Index:
 			results = self.sort_by(documents)
 			ret = []
 			for result in results:
-				doc = marshal.loads(self.db['D_' + result[1]])
+				doc = marshal.loads(self.db['D_%s' % result[1]])
 				doc['score'] = result[0]
 				if doc.get('raw_content'):
 					doc['summary'] = t.summarise(doc['raw_content'], query)
@@ -108,6 +119,9 @@ class Index:
 					doc['summary'] = ''
 				ret.append(doc)
 		return ret
+		
+	def close(self):
+		self.db.close()
 
 class Document:
 	
@@ -194,7 +208,8 @@ class Text:
 					after = ' '.join(tokens[position+1:position+margin])
 					before = before.split('.')[-1].strip()
 					after = after.split('.')[0].strip()
-					phrases.append(before + ' <strong>' + token + '</strong> ' + after)				
+					phrase = '%s <strong>%s</strong> %s' % (before, token, after)
+					phrases.append(phrase)				
 					if len(phrases) == max_phrases: break
 			position += 1
 		return ' ... '.join(phrases)
