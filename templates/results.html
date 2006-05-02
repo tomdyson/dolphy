@@ -1,0 +1,20 @@
+#filter RawOrEncodedUnicode
+
+#if $query
+    You searched for <em>$query</em>
+#else
+    Here's a search form
+#end if
+
+#if $results
+	We found $len($results) results in $duration seconds.<hr />
+	#for $result in $results
+	    <h2>$result['title']</h2>
+		$result['str_modified']<br />
+		<!--$result['score']<br />-->
+		#if $result['summary']
+			$result['summary']<br /><br />
+		#end if
+		<em>$result['raw_content']</em><br />
+	#end for
+#end if
