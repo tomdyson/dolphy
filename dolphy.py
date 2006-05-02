@@ -98,7 +98,7 @@ class Index:
 		results.reverse()
 		return results
 
-	def search(self, query):
+	def search(self, query, summarise='simple'):
 		query = query.lower()
 		ret = []
 		t = Text()
@@ -113,7 +113,11 @@ class Index:
 				doc = marshal.loads(self.db['D_%s' % result[1]])
 				doc['score'] = result[0]
 				if doc.get('raw_content'):
-					doc['summary'] = t.summarise(doc['raw_content'], query)
+					# TODO: dispatch summarisers better
+					if summarise == 'highlight':
+						doc['summary'] = t.summarise(doc['raw_content'], query)
+					else:
+						doc['summary'] = t.simpleSummarise(doc['raw_content'])
 				else:
 					doc['summary'] = ''
 				ret.append(doc)
@@ -212,6 +216,13 @@ class Text:
 					if len(phrases) == max_phrases: break
 			position += 1
 		return ' ... '.join(phrases)
+
+	def simpleSummarise(self, text, minimum_characters=80):
+		"""Naive contextual highlighting"""
+		summary = text[0:text.find(' ', minimum_characters)]
+		if not summary.endswith('.'):
+			summary = summary + '...'
+		return summary.strip()
 
 class Cache:
 	"""General purpose caching, currently dropped in favour of 
