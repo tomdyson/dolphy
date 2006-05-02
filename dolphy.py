@@ -1,7 +1,6 @@
 # Dolphy - high performance, pure Python text indexer
 # Tom Dyson, April 2006
 
-# TODO: incremental indexing
 # TODO: Phrase searching
 # TODO: Boolean queries
 # TODO: Improve summarisation performance
