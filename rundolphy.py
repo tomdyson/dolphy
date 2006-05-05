@@ -7,19 +7,20 @@ def testIndex():
 	strip_tags = re.compile('<.*?>')
 	strip_comments = re.compile('<!--.*?-->')
 	# add documents to the index
-	docs = marshal.loads(open('data/posts.db').read())
+	docs = marshal.loads(open('data/posts.marshal').read())
 	start = time.time()
 	for doc in docs:
 		title = doc[0]
-		contents = doc[1]
-		epoch_date = doc[2]
+		contents = doc[2]
+		epoch_date = doc[1]
 		d = Document(title, title, 'Tom', epoch_date)
 		# tags and comments should have been stripped already
-		contents = strip_comments.sub(' ',contents)
-		d.raw_data = strip_tags.sub(' ',contents) 
+		contents = strip_comments.sub('',contents)
+		d.raw_data = strip_tags.sub('',contents) 
 		stream = t.tokenizeAndStem(title + ' ' + contents)
 		d.tokens, d.length = t.calculateTokens(stream)
 		i.add(d)
+	i.close()
 	took = time.time() - start
 	print "indexed %s docs in %.3f seconds" % (len(docs), took)
 	print "(%.2f docs per second)" % (len(docs) / took)
@@ -34,12 +35,12 @@ def testUnicodeIndex():
 	d.tokens = calculated_tokens
 	i.add(d)
 	
-def testSearch(term):
+def testSearch(term, summariser='simple'):
 	# search the index
 	i = Index('data/test.db')
 	print '\nSearching for %s...' % term
 	start = time.time()
-	results = i.search(term)
+	results = i.search(term, summariser)
 	took = time.time() - start
 	for result in results:
 		print result['title'], result['score']
@@ -70,7 +71,7 @@ def testStats():
 		print term
 
 if __name__ == "__main__":
-	#testIndex()
-	testSearch('music')
-	testSortByDate('music')
+	testIndex()
+	testSearch('loveday')
+	#testSortByDate('music')
 	#testStats()
