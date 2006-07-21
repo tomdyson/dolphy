@@ -3,7 +3,7 @@
 
 # TODO: Phrase searching
 # TODO: Boolean queries
-# TODO: Improve summarisation performance
+# TODO: Paging support
 # TODO: Tests
 
 import re
@@ -75,6 +75,7 @@ class Index:
 		pass
 		
 	def sortByPositionAndFrequency(self, documents):
+		"""Rank documents by term frequency and position"""
 		results = []
 		for doc in documents:
 			score = 0
@@ -92,24 +93,30 @@ class Index:
 	def sortByDate(self, documents):
 		results = []
 		for doc in documents:
-			doc_details = marshal.loads(self.db['D_' + doc])
+			doc_details = marshal.loads(self.db['D_' + str(doc)])
 			results.append((doc_details['modified'], doc))
 		results.sort()
 		results.reverse()
 		return results
 
-	def search(self, query, summarise='simple'):
+	def search(self, query, summarise='simple', page_start=1, page_size=10):
+		"""Retrieve and sort documents containing the specified term"""
 		query = query.lower()
 		ret = []
 		t = Text()
 		porter = tokenize.PorterStemmer()
 		stemmed_query = porter.stem(query)
 		matching_documents = self.db.get('T_' + stemmed_query)
+		ret = {}
+		ret['query'] = query
 		if matching_documents:
 			documents = marshal.loads(matching_documents)
 			results = self.sort_by(documents)
-			ret = []
-			for result in results:
+			ret['count'] = len(results)
+			ranked_documents = []
+			page_from = page_start - 1
+			page_to = page_from + page_size
+			for result in results[page_from:page_to]:
 				doc = marshal.loads(self.db['D_%s' % result[1]])
 				doc['score'] = result[0]
 				if doc.get('raw_content'):
@@ -120,7 +127,8 @@ class Index:
 						doc['summary'] = t.simpleSummarise(doc['raw_content'])
 				else:
 					doc['summary'] = ''
-				ret.append(doc)
+				ranked_documents.append(doc)
+			ret['hits'] = ranked_documents
 		return ret
 		
 	def close(self):
@@ -218,40 +226,12 @@ class Text:
 		return ' ... '.join(phrases)
 
 	def simpleSummarise(self, text, minimum_characters=80):
-		"""Naive contextual highlighting"""
+		"""Return minimum characters plus any remaining portion of a term"""
 		summary = text[0:text.find(' ', minimum_characters)]
 		if not summary.endswith('.'):
 			summary = summary + '...'
 		return summary.strip()
 
-class Cache:
-	"""General purpose caching, currently dropped in favour of 
-		less functional but less instrusive Memoize"""
-	def __init__(self, max_keys = 5000):
-		self.max_keys = max_keys
-		self._cache = {}
-		
-	def get(self, key):
-		return self._cache.get(key)
-		
-	def set(self, key, value):
-		if len(self._cache) < self.max_keys:
-			self._cache[key] = value
-		else: pass
-	
-	def __len__(self): 
-		return len(self._cache)
-		
-	def store(self, filename):
-		fo = open(filename, 'w')
-		fo.write(marshal.dumps(self._cache))
-		fo.close()
-		
-	def load(self, filename):
-		fo = open(filename)
-		self._cache = marshal.loads(fo.read())
-		fo.close()
-		
 class Memoize:
 	# TODO: include support for pre-loading cached values, like Cache().load()
     def __init__(self, fn):
