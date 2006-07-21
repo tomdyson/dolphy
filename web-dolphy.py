@@ -1,4 +1,4 @@
-#!/usr/bin/python2.3
+#!/usr/bin/python2.4
 
 import web
 import dolphy
@@ -16,7 +16,7 @@ class Results:
 		query = web.input().get('q')
 		start = time.time()
 		i = dolphy.Index('data/test.db')
-		results = i.search(query)
+		results = i.search(query, 'simple')
 		duration = "%.6f" % (time.time() - start)
 		tmp = open('templates/results.html').read()
 		web.render(tmp, isString=True)
