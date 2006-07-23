@@ -11,6 +11,7 @@ from nltk_lite import tokenize
 import time
 import dbhash
 import marshal
+from sets import Set
 
 STOPWORDS = '/Users/tomdyson/Documents/code/python/dolphy/data/stopwords.txt'
 
@@ -98,19 +99,66 @@ class Index:
 		results.sort()
 		results.reverse()
 		return results
+		
+	def mergeMatches(self, doc_groups, merge_type="intersection"):
+		"""	Combine sets of matching documents, e.g. for each term
+			in a multi-term query. Supports intersections (for AND
+			queries) and unions (for ORs). """
+		# TODO: less frequent terms (across all documents) should
+		# be weighted - perhaps this is where to return the weighting
+		# (or just the frequency)
+		combined_set = {}
+		doc_groups_copy = list(doc_groups)
+		intersected = Set(doc_groups_copy.pop().keys())
+		if merge_type == "intersection":
+			for doc_group in doc_groups_copy:
+				intersected = intersected.intersection(Set(doc_group.keys()))
+			for doc in intersected:
+				positions = []
+				len = 0
+				for doc_group in doc_groups:
+					positions.extend(doc_group[doc][0])
+					len = doc_group[doc][1] # should only have to get this once
+				combined_set[doc] = (positions, len)
+		elif merge_type == "union":
+			for doc_group in doc_groups_copy:
+				intersected = intersected.union(Set(doc_group.keys()))
+			for doc in intersected:
+				positions = []
+				len = 0
+				for doc_group in doc_groups:
+					if doc in doc_group:
+						positions.extend(doc_group[doc][0])
+						len = doc_group[doc][1] # should only have to get this once
+				combined_set[doc] = (positions, len)
+		print combined_set
+		return combined_set
 
-	def search(self, query, summarise='simple', page_start=1, page_size=10):
-		"""Retrieve and sort documents containing the specified term"""
-		query = query.lower()
+	def search(self, query, summarise='simple', page_start=1, page_size=10, operator="AND"):
+		"""Retrieve and sort documents containing the specified term(s)"""
+		query_terms = query.lower().strip().split(' ')
 		ret = []
 		t = Text()
 		porter = tokenize.PorterStemmer()
-		stemmed_query = porter.stem(query)
-		matching_documents = self.db.get('T_' + stemmed_query)
+		if len(query_terms) > 1:
+			matching_document_groups = []
+			for query_term in query_terms:
+				stemmed_query = porter.stem(query_term)
+				matching_documents = self.db.get('T_' + query_term)
+				if matching_documents:
+					matching_document_groups.append(marshal.loads(matching_documents))
+			# copy the list of matching document groups for sets
+			if operator == "AND": join_type = "intersection"
+			elif operator == "OR": join_type = "union"
+			documents = self.mergeMatches(matching_document_groups, join_type)
+		else:
+			query_term = query_terms[0]
+			stemmed_query = porter.stem(query_term)
+			matching_documents = self.db.get('T_' + query_term)
+			documents = marshal.loads(matching_documents)
 		ret = {}
 		ret['query'] = query
 		if matching_documents:
-			documents = marshal.loads(matching_documents)
 			results = self.sort_by(documents)
 			ret['count'] = len(results)
 			ranked_documents = []
