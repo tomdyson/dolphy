@@ -1,3 +1,6 @@
 Dolphy notes
 
-* Documents have arbitrary attributes and tokens and date_modified
+* Documents have arbitrary attributes and 
+ - tokens
+ - one standard sort relies on date_modified
+ - one standard summarisation relies on raw
