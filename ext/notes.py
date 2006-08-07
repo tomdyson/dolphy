@@ -34,7 +34,5 @@ i.close() # do optimisations here?
 results = i.search('warmth')
 
 # filtering on meta data
-def onlySurf(doc):
-	return 'surf' in doc.genres
-		
+def onlySurf(doc): return 'surf' in doc.genres		
 results = i.search(query = 'warmth', filter = 'onlySurf')
