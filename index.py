@@ -9,13 +9,12 @@
 #import sys
 #sys.path.append('dolphy/lib')
 
-from lib.nltk_lite import tokenize
+import dolphy
 import time
 import dbhash
 import marshal
 from sets import Set
-
-STOPWORDS = '/Users/tomdyson/Documents/code/python/dolphy/data/stopwords.txt'
+from lib.nltk_lite import tokenize
 
 class Index(object):
 	
@@ -33,8 +32,8 @@ class Index(object):
 		self.max_id = int(self.db.get('M_max_id', 0))
 		self.sort_by = self.sortByPositionAndFrequency
 		# TODO: consider requirement for loading stopwords here
-		# or speed it up
-		self.stopwords = [line.strip() for line in open(STOPWORDS)]
+		# or speed it up
+		self.stopwords = [line.strip() for line in open(dolphy.STOPWORDS)]
 	
 	def add(self, document, defer_recalculate = True):
 		# Retreive (if known URI) or assign document ID
@@ -47,28 +46,20 @@ class Index(object):
 			document.id = self.max_id
 			self.db["U_" + document.uri] = str(document.id)
 		# Add an entry for each document's metadata
-		doc_details = {}
-		doc_details['uri'] = document.uri
-		doc_details['title'] = document.title
-		doc_details['author'] = document.author
-		doc_details['modified'] = document.modified
+		tokens = document.tokens
+		del(document.tokens) # we don't want to store these
+		doc_details = document.__dict__
 		modified = time.localtime(document.modified)
 		doc_details['str_modified'] = time.strftime('%d %B %Y', modified)
-		try:
-			# TODO: better name for raw_content
-			# TODO: check attribute exists, don't just try to read it
-			doc_details['raw_content'] = document.raw_data
-		except AttributeError:
-			pass
 		self.db["D_%s" % document.id] = marshal.dumps(doc_details)
 		# Add/update the entry for each term in the document
-		for term in document.tokens:
+		for term in tokens:
 			if self.db.has_key('T_' + term):
 				term_data = marshal.loads(self.db['T_' + term])
-				term_data[document.id] = (document.tokens[term], document.length)
 			else:
 				term_data = {}
-				term_data[document.id] = (document.tokens[term], document.length)
+			term_data[document.id] = (tokens[term], document.length)
+			# TODO: optimise by chunking db inserts
 			self.db['T_' + term] = marshal.dumps(term_data)
 		
 	def remove(self, document_URI, defer_recalculate = True):
@@ -142,7 +133,7 @@ class Index(object):
 		"""Retrieve and sort documents containing the specified term(s)"""
 		query_terms = query.lower().strip().split(' ')
 		ret = []
-		t = Text()
+		t = dolphy.text.Text()
 		porter = tokenize.PorterStemmer()
 		if len(query_terms) > 1:
 			matching_document_groups = []
@@ -172,17 +163,33 @@ class Index(object):
 			for result in results[page_from:page_to]:
 				doc = marshal.loads(self.db['D_%s' % result[1]])
 				doc['score'] = result[0]
-				if doc.get('raw_content'):
+				if doc.get('body'):
 					# TODO: dispatch summarisers better
 					if summarise == 'highlight':
-						doc['summary'] = t.summarise(doc['raw_content'], query)
+						doc['summary'] = t.summarise(doc['body'], query)
 					else:
-						doc['summary'] = t.simpleSummarise(doc['raw_content'])
+						doc['summary'] = t.simpleSummarise(doc['body'])
 				else:
 					doc['summary'] = ''
+				# convert hit dict into a Storage object
+				doc = storage(doc)
 				ranked_documents.append(doc)
 			ret['hits'] = ranked_documents
+			# convert results dict into a Storage object
+			ret = storage(ret)
 		return ret
 		
 	def close(self):
 		self.db.close()
+		
+class Storage(dict):
+    """	A Storage object is like a dictionary except `obj.foo` can be used
+    	instead of `obj['foo']`. Create one by doing `storage({'a':1})`.
+		From web.py (webpy.org) """
+    def __getattr__(self, k): 
+        if self.has_key(k): return self[k]
+        raise AttributeError, repr(k)
+    def __setattr__(self, k, v): self[k] = v
+    def __repr__(self): return '<Storage '+dict.__repr__(self)+'>'
+
+storage = Storage
