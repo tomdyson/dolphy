@@ -28,14 +28,14 @@ class SearchTests(unittest.TestCase):
 		d = Document('test1.txt', 1146593534)
 		d.title = 'Cow speech'
 		d.author = 'Tom Dyson'
-		d.raw_content = 'The cow declares moo'
+		d.raw_content = 'The cow says moo'
 		d.my_custom_attribute = 42
 		d.tokens = {'The':[0], 'cow':[1], 'says':[2], 'moo':[3]}
 		d.length = 4
 		d2 = Document('test2.txt', 1146593534)
-		d2.title = 'Sheep speech'
+		d2.title = 'Bull speech'
 		d2.author = 'Tom Dyson'
-		d2.raw_content = 'The sheep declares baa'
+		d2.raw_content = 'The bull says moo'
 		d2.tokens = {'The':[0], 'bull':[1], 'says':[2], 'moo':[3]}
 		d2.length = 4
 		self.i = Index(SIMPLEINDEX)
